@@ -27,7 +27,7 @@ function updatelist() {
         //  Fetch amount of pages
         //let getpages = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}${urlend}`);
         try{
-        let getpages = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&primary_release_date.gte=2022-01-01&primary_release_date.lte=2023-12-31&vote_count.gte=10&vote_average.gte=5.5&with_genres=27`);
+        let getpages = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&primary_release_date.gte=2022-01-01&primary_release_date.lte=2023-12-31&vote_average.gte=5.5&with_genres=27`);
         let pagedata = await getpages.json();
         let pages = pagedata.total_pages;
 
@@ -37,7 +37,7 @@ function updatelist() {
         let count = 0;
         // Loop through all pages
         for (let page = 1; page <= pages; page++) {
-            const getresults = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&page=${page}&primary_release_date.gte=2022-01-01&primary_release_date.lte=2023-12-31&vote_count.gte=10&vote_average.gte=5.5&with_genres=27`);
+            const getresults = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&page=${page}&primary_release_date.gte=2022-01-01&primary_release_date.lte=2023-12-31&vote_average.gte=5.5&with_genres=27`);
             let data = await getresults.json();
 
             for (let i = 0; i < data.results.length; i++) {
@@ -143,6 +143,8 @@ var job = new CronJob(
 );
 
 job.start();
+
+updatelist();
 
 exports.updatelist = updatelist;
 
