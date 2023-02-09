@@ -1,8 +1,8 @@
 {
-  "name": "new-horror-movies",
+  "name": "horrorsync",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,8 +11,9 @@
   "license": "ISC",
   "dependencies": {
     "cron": "^2.2.0",
-    "http": "^0.0.1-security",
-    "mongodb": "^4.13.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "mysql2": "^3.1.0",
     "node-fetch": "^2.6.7"
   }
 }
