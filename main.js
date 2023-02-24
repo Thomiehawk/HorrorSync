@@ -20,24 +20,24 @@ var movies = [];
 var updates = [];
 
 const tmdbapikey = process.env.API_KEY;
+const gte_date = '2022-01-01';
+const lte_date = '2023-12-31';
 
 function updatelist() {
 
     async function getmovies() {
         //  Fetch amount of pages
-        //let getpages = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}${urlend}`);
         try {
-            let getpages = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&primary_release_date.gte=2022-01-01&primary_release_date.lte=2023-12-31&vote_average.gte=5.5&with_genres=27`);
+            let getpages = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&primary_release_date.gte=${gte_date}&primary_release_date.lte=${lte_date}&vote_average.gte=5.5&with_genres=27`);
             let pagedata = await getpages.json();
             let pages = pagedata.total_pages;
 
             console.log(pagedata)
-            //exit()
 
             let count = 0;
             // Loop through all pages
             for (let page = 1; page <= pages; page++) {
-                const getresults = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&page=${page}&primary_release_date.gte=2022-01-01&primary_release_date.lte=2023-12-31&vote_average.gte=5.5&with_genres=27`);
+                const getresults = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&page=${page}&primary_release_date.gte=${gte_date}&primary_release_date.lte=${lte_date}&vote_average.gte=5.5&with_genres=27`);
                 let data = await getresults.json();
 
                 for (let i = 0; i < data.results.length; i++) {
@@ -46,30 +46,56 @@ function updatelist() {
                     let providers = await getproviders.json();
 
 
-
+                    // Check if movie is streamable
                     let streamable = false;
                     if (isNotEmptyObject(providers.results)) {
                         streamable = true;
                     }
+                    // Check if there is a poster
                     poster = null;
                     poster = data.results[i].poster_path;
                     if (poster == null) {
                         poster = "N/A";
                     }
-
+                    // Check if there is a synopsis
                     synopsis = null;
                     synopsis = data.results[i].overview;
                     if (synopsis == null) {
                         synopsis = "N/A"
                     }
+                    // Check if there is a digital release date
+                    const getstreamabledate = await fetch(`https://api.themoviedb.org/3/movie/${data.results[i].id}/release_dates?api_key=${tmdbapikey}`)
+                    let streamabledate = await getstreamabledate.json();
+
+                    // Loop through all release dates
+                    let objects = streamabledate.results
+                    var streaming_dates = [];
+                    objects.forEach((element) => {
+                        for (let index = 0; index < element.release_dates.length; index++) {
+                            if (element.release_dates[index].type == 4) {
+                                streaming_dates.push(new Date(element.release_dates[index].release_date));
+                            }
+                        }
+                    })
+                    // If there are digital release dates, pick oldest
+                    if (isNotEmptyObject(streaming_dates)) {
+                        primary_streaming_timestamp = (new Date(Math.min.apply(null, streaming_dates)));
+                        primary_streaming_date = primary_streaming_timestamp.getFullYear() + '-' + (primary_streaming_timestamp.getMonth() + 1) + '-' + primary_streaming_timestamp.getDate();
+                    }
+                    else {
+                        primary_streaming_date = 'NULL';
+                    }
+
+                    const getexternalids = await fetch(`https://api.themoviedb.org/3/movie/${data.results[i].id}/external_ids?api_key=${tmdbapikey}`)
+                    let externalids = await getexternalids.json();
 
 
-
+                    // Push all movie data into an array
                     console.log(data.results[i].id, data.results[i].title + ` Release date: ${data.results[i].release_date} Synopsis: ${data.results[i].overview} Poster: ${data.results[i].poster_path} streamable: ${streamable} ` + count,);
                     count++;
                     var release_moment = new Date(data.results[i].release_date);
                     var release_date = release_moment.getFullYear() + '-' + (release_moment.getMonth() + 1) + '-' + release_moment.getDate();
-                    movies.push({ ID: data.results[i].id, Title: data.results[i].title, Synopsis: synopsis, Poster: poster, release_date: release_date, streamable: streamable, lastmodified: new Date() });
+                    movies.push({ ID: data.results[i].id, imdbID: externalids.imdb_id, Title: data.results[i].title, Synopsis: synopsis, Poster: poster, release_date: release_date, streamable: streamable, streamable_date: primary_streaming_date, lastmodified: new Date() });
 
                 }
             }
@@ -83,8 +109,8 @@ function updatelist() {
     async function lookupdb() {
         try {
             const [rows, fields] = await dbpromise.query("SELECT * FROM movies");
-            // Check if movies found in API results are already present in database, if database has it listed
-            // as not streamable but API says it is, add to newreleases array.
+            // Check if movies found in API results, are already in database.
+            // If it's there and database has it listed as not streamable but it has become available, add it to the updates array.
             let count = 0;
             i = movies.length;
             while (i--) {
@@ -94,7 +120,7 @@ function updatelist() {
                     let movie = movies[i];
                     movies.splice(i, 1);
                     if (movie.streamable && !rows[queryindex].streamable) {
-                        updates.push({ streamable: movie.streamable, lastmodified: movie.lastmodified, id: movie.ID });
+                        updates.push({ streamable: movie.streamable, lastmodified: movie.lastmodified, streaming_release_date: primary_streaming_date, id: movie.ID });
 
                     }
 
@@ -108,10 +134,11 @@ function updatelist() {
 
     }
     async function updatedb() {
-        // await getmovies();
-        // await lookupdb();
+        await getmovies();
+        await lookupdb();
+        // Update movies table
         for (i = 0; i < updates.length; i++) {
-            let sql = "UPDATE movies SET streamable =? , lastmodified =?   WHERE id =?";
+            let sql = "UPDATE movies SET streamable =? , lastmodified =? streaming_release_date =?  WHERE id =?";
             db.query(sql, Object.values(updates[i]), (err, result) => {
                 if (err) throw err;
             });
@@ -122,20 +149,20 @@ function updatelist() {
             moviearray.push(Object.values(movies[i]));
         }
 
-
+        // Insert new movies into database
         if (isNotEmptyObject(moviearray)) {
-            let sql = 'INSERT INTO movies (id, title, synopsis, poster, release_date, streamable, lastmodified) VALUES ?';
+            let sql = 'INSERT INTO movies (id, imdbid, title, synopsis, poster, release_date, streamable, streaming_release_date, lastmodified) VALUES ?';
             db.query(sql, [moviearray], (err, result) => {
                 if (err) throw err;
-                console.log("Added " + result.affectedRows + " movie(s) to the database.");
+                console.log("Added " + moviearray.length + " movie(s) to the database.");
 
             });
         }
 
     }
 
-    // updatedb()
-    getmovies();
+    updatedb()
+
 
 }
 var CronJob = require('cron').CronJob;
@@ -171,27 +198,3 @@ app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
 
-async function streamable() {
-
-    const getstreamabledate = await fetch(`https://api.themoviedb.org/3/movie/895744/release_dates?api_key=${tmdbapikey}`)
-    let streamabledate = await getstreamabledate.json();
-
-    
-    // console.log(streamabledate.results[4])
-    let objects = streamabledate.results
-    var primary_streaming_date = null;
-    objects.forEach(element => {
-        console.log(element)
-    });
-
-    objects.forEach((element)=>{
-        for(i=0; i< element.release_dates.length; i++){
-            console.log(element.release_dates[i].type);
-        }
-    })
-
-// console.log(primary_streaming_date)
-
-}
-
-streamable();
