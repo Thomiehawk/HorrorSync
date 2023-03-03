@@ -18,6 +18,7 @@ function isNotEmptyObject(obj) {
 
 var movies = [];
 var updates = [];
+var updatenodate = [];
 
 const tmdbapikey = process.env.API_KEY;
 const gte_date = '2022-01-01';
@@ -39,6 +40,7 @@ function updatelist() {
             for (let page = 1; page <= pages; page++) {
                 const getresults = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbapikey}&page=${page}&primary_release_date.gte=${gte_date}&primary_release_date.lte=${lte_date}&vote_average.gte=5.5&with_genres=27`);
                 let data = await getresults.json();
+            
 
                 for (let i = 0; i < data.results.length; i++) {
                     // Check if there are any providers for each movie
@@ -83,7 +85,7 @@ function updatelist() {
                         primary_streaming_date = primary_streaming_timestamp.getFullYear() + '-' + (primary_streaming_timestamp.getMonth() + 1) + '-' + primary_streaming_timestamp.getDate();
                     }
                     else {
-                        primary_streaming_date = 'NULL';
+                        primary_streaming_date = null;
                     }
 
                     const getexternalids = await fetch(`https://api.themoviedb.org/3/movie/${data.results[i].id}/external_ids?api_key=${tmdbapikey}`)
@@ -96,7 +98,7 @@ function updatelist() {
                     var release_moment = new Date(data.results[i].release_date);
                     var release_date = release_moment.getFullYear() + '-' + (release_moment.getMonth() + 1) + '-' + release_moment.getDate();
                     movies.push({ ID: data.results[i].id, imdbID: externalids.imdb_id, Title: data.results[i].title, Synopsis: synopsis, Poster: poster, release_date: release_date, streamable: streamable, streamable_date: primary_streaming_date, lastmodified: new Date() });
-
+                    
                 }
             }
             console.log(count);
@@ -120,7 +122,11 @@ function updatelist() {
                     let movie = movies[i];
                     movies.splice(i, 1);
                     if (movie.streamable && !rows[queryindex].streamable) {
+                        if(movie.streaming_release_date != null)
                         updates.push({ streamable: movie.streamable, lastmodified: movie.lastmodified, streaming_release_date: primary_streaming_date, id: movie.ID });
+                        else{
+                            updatenodate.push({ streamable: movie.streamable, lastmodified: movie.lastmodified, id: movie.ID});
+                        }
 
                     }
 
@@ -137,13 +143,22 @@ function updatelist() {
         await getmovies();
         await lookupdb();
         // Update movies table
+        
         for (i = 0; i < updates.length; i++) {
             let sql = "UPDATE movies SET streamable =? , lastmodified =? streaming_release_date =?  WHERE id =?";
             db.query(sql, Object.values(updates[i]), (err, result) => {
                 if (err) throw err;
             });
         }
+   
+        for (i = 0; i < updatenodate.length; i++) {
+            let sql= "UPDATE movies SET streamable =? , lastmodified =?  WHERE id =?";
+            db.query(sql, Object.values(updatenodate[i]), (err, result) => {
+                if (err) throw err;
+            });
+        }
         console.log("Updated " + updates.length + " movie(s)");
+
         var moviearray = [];
         for (i = 0; i < movies.length; i++) {
             moviearray.push(Object.values(movies[i]));
@@ -174,7 +189,7 @@ var job = new CronJob(
 
 job.start();
 
-// updatelist();
+updatelist();
 
 exports.updatelist = updatelist;
 

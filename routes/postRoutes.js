@@ -9,6 +9,6 @@ router
     .post(postControllers.createNewPost);
 
 router.route("/update").get(postControllers.updatelist);
-router.route("/movie/:query").get(postControllers.getPostById);
+router.route("/latestmovie").get(postControllers.latestmovie);
 
 module.exports = router;
