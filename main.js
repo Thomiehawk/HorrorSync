@@ -50,8 +50,10 @@ function updatelist() {
 
                     // Check if movie is streamable
                     let streamable = false;
-                    if (isNotEmptyObject(providers.results)) {
+                    if (providers.results) {
+                        if (isNotEmptyObject(providers.results)){
                         streamable = true;
+                        }
                     }
                     // Check if there is a poster
                     poster = null;
@@ -72,6 +74,7 @@ function updatelist() {
                     // Loop through all release dates
                     let objects = streamabledate.results
                     var streaming_dates = [];
+                    if(objects){
                     objects.forEach((element) => {
                         for (let index = 0; index < element.release_dates.length; index++) {
                             if (element.release_dates[index].type == 4) {
@@ -79,6 +82,7 @@ function updatelist() {
                             }
                         }
                     })
+                }
                     // If there are digital release dates, pick oldest
                     if (isNotEmptyObject(streaming_dates)) {
                         primary_streaming_timestamp = (new Date(Math.min.apply(null, streaming_dates)));
